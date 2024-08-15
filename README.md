@@ -81,13 +81,13 @@ go get go.mongodb.org/mongo-driver/mongo
 1. Clone the repository:
 
 ```
-git clone https://github.com/dagmaros27/backend-with-go.git
+git clone [https://github.com/dagmaros27/task-management-API.git](https://github.com/dagmaros27/task-management-API.git)
 ```
 
 2. Navigate to the project directory:
 
 ```
-cd /tasks/task7/'task managment api with clean arch'
+cd task-managment-API
 ```
 
 3. Install dependencies:
