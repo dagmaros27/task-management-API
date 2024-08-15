@@ -2,7 +2,6 @@ package infrastructure_test
 
 import (
 	"net/http"
-	bootstrap "task_managment_api"
 	"task_managment_api/domain"
 	"task_managment_api/infrastructure"
 	"testing"
@@ -28,9 +27,6 @@ func (suite *JWTServiceTestSuite) SetupTest() {
 		Role:     "user",
 	}
 
-	// Mocking bootstrap.NewEnv().AccessTokenSecret
-	bootstrapEnv := bootstrap.NewEnv()
-	bootstrapEnv.AccessTokenSecret = suite.secret
 }
 
 // TestGenerateUserTokenSuccess tests successful token generation
