@@ -8,7 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func SetupRouter(db *mongo.Database, taskController *controllers.TaskController, userController *controllers.UserController) *gin.Engine {
+func SetupRouter(db *mongo.Database, taskController *controllers.TaskController, userController *controllers.UserController, authService infrastructure.AuthMiddlewareService) *gin.Engine {
 
 	
 	router := gin.Default()
@@ -17,19 +17,21 @@ func SetupRouter(db *mongo.Database, taskController *controllers.TaskController,
 	router.POST("/register", userController.RegisterUser)
 	router.POST("/login", userController.LoginUser)
 
+
+
 	// private routes
 	authorized := router.Group("/")
-	authorized.Use(infrastructure.AuthMiddleware())
+	authorized.Use(authService.AuthMiddleware())
 
 	// task routes
 	authorized.GET("/tasks", taskController.GetTasks)
 	authorized.GET("/tasks/:id", taskController.GetTaskByID)
-	authorized.POST("/tasks", infrastructure.AdminMiddleware(), taskController.CreateTask)
-	authorized.PUT("/tasks/:id", infrastructure.AdminMiddleware(), taskController.UpdateTaskByID)
-	authorized.DELETE("/tasks/:id", infrastructure.AdminMiddleware(), taskController.DeleteTaskByID)
+	authorized.POST("/tasks", authService.AdminMiddleware(), taskController.CreateTask)
+	authorized.PUT("/tasks/:id", authService.AdminMiddleware(), taskController.UpdateTaskByID)
+	authorized.DELETE("/tasks/:id", authService.AdminMiddleware(), taskController.DeleteTaskByID)
 
 	// user promotion route
-	authorized.POST("/promote", infrastructure.AdminMiddleware(), userController.PromoteUser)
+	authorized.POST("/promote", authService.AdminMiddleware(), userController.PromoteUser)
 
 	return router
 }

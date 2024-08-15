@@ -7,28 +7,54 @@ import (
 	"task_managment_api/infrastructure"
 	"testing"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
 
+type MockJWTService struct {
+	mock.Mock
+}
+
+func (m *MockJWTService) GenerateUserToken(user domain.User) (string, domain.CustomError) {
+	args := m.Called(user)
+	return args.Get(0).(string), args.Get(1).(domain.CustomError)
+}
+
+func (m *MockJWTService) ValidateToken(tokenString string) (jwt.MapClaims, domain.CustomError) {
+	args := m.Called(tokenString)
+	return args.Get(0).(jwt.MapClaims), args.Get(1).(domain.CustomError)
+}
+
 type MiddlewareTestSuite struct {
 	suite.Suite
-	jwtService infrastructure.JWTService
-	user       domain.User
-	token      string
+	mockService *MockJWTService
+	user        domain.User
+	token       string
+	authService infrastructure.AuthMiddlewareService
 }
 
 func (suite *MiddlewareTestSuite) SetupTest() {
 	// Initialize JWT service and a mock user
-	suite.jwtService = infrastructure.NewJWTService()
+	suite.mockService = new(MockJWTService)
 	suite.user = domain.User{
 		ID:       "user-id-123",
 		Username: "testuser",
 		Role:     "admin", // Set the role to "admin" for testing AdminMiddleware
 	}
+	suite.authService = infrastructure.NewAuthService(suite.mockService)
+
+	// Stub the token generation and validation methods
+	suite.mockService.On("GenerateUserToken", suite.user).Return("mocked-token", domain.CustomError{})
+	suite.mockService.On("ValidateToken", "mocked-token").Return(jwt.MapClaims{
+		"userId":   suite.user.ID,
+		"username": suite.user.Username,
+		"role":     suite.user.Role,
+	}, domain.CustomError{})
 
 	// Generate a valid JWT token for the user
-	token, err := suite.jwtService.GenerateUserToken(suite.user)
+	token, err := suite.mockService.GenerateUserToken(suite.user)
 	if err.ErrCode != 0 {
 		suite.T().Fatal("Failed to generate token:", err.ErrMessage)
 	}
@@ -42,7 +68,7 @@ func (suite *MiddlewareTestSuite) TestAuthMiddlewareSuccess() {
 	c.Request, _ = http.NewRequest(http.MethodGet, "/", nil)
 	c.Request.Header.Set("Authorization", "Bearer "+suite.token)
 
-	middleware := infrastructure.AuthMiddleware()
+	middleware := suite.authService.AuthMiddleware()
 	middleware(c)
 
 	suite.Equal(http.StatusOK, w.Code)
@@ -57,7 +83,7 @@ func (suite *MiddlewareTestSuite) TestAuthMiddlewareMissingAuthorizationHeader()
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest(http.MethodGet, "/", nil)
 
-	middleware := infrastructure.AuthMiddleware()
+	middleware := suite.authService.AuthMiddleware()
 	middleware(c)
 
 	suite.Equal(http.StatusUnauthorized, w.Code)
@@ -71,7 +97,7 @@ func (suite *MiddlewareTestSuite) TestAuthMiddlewareInvalidFormat() {
 	c.Request, _ = http.NewRequest(http.MethodGet, "/", nil)
 	c.Request.Header.Set("Authorization", "InvalidTokenFormat")
 
-	middleware := infrastructure.AuthMiddleware()
+	middleware := suite.authService.AuthMiddleware()
 	middleware(c)
 
 	suite.Equal(http.StatusUnauthorized, w.Code)
@@ -84,7 +110,7 @@ func (suite *MiddlewareTestSuite) TestAdminMiddlewareSuccess() {
 	c, _ := gin.CreateTestContext(w)
 	c.Set("role", "admin") // Simulate setting the role from AuthMiddleware
 
-	middleware := infrastructure.AdminMiddleware()
+	middleware := suite.authService.AdminMiddleware()
 	middleware(c)
 
 	suite.Equal(http.StatusOK, w.Code)
@@ -96,7 +122,7 @@ func (suite *MiddlewareTestSuite) TestAdminMiddlewareForbidden() {
 	c, _ := gin.CreateTestContext(w)
 	c.Set("role", "user") // Simulate setting a non-admin role
 
-	middleware := infrastructure.AdminMiddleware()
+	middleware := suite.authService.AdminMiddleware()
 	middleware(c)
 
 	suite.Equal(http.StatusForbidden, w.Code)

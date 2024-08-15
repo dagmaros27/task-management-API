@@ -7,17 +7,16 @@ import (
 
 	"task_managment_api/domain"
 	"task_managment_api/infrastructure"
-	"time"
 )
 
 type userUsecase struct {
 	userRepository domain.UserRepository
-	ctxTimeout time.Duration
 	passwordService infrastructure.PasswordService
+	jwtService infrastructure.JWTService
 }
 
-func NewUserUsecase(userRepository domain.UserRepository, ctxTimeout time.Duration, passwordService infrastructure.PasswordService) domain.UserUsecase {
-	return &userUsecase{userRepository: userRepository, ctxTimeout: ctxTimeout, passwordService: passwordService}
+func NewUserUsecase(userRepository domain.UserRepository, jwtService infrastructure.JWTService, passwordService infrastructure.PasswordService) domain.UserUsecase {
+	return &userUsecase{userRepository: userRepository, jwtService: jwtService, passwordService: passwordService}
 }
 
 
@@ -74,7 +73,7 @@ func (uc *userUsecase)AuthenticateUser(c context.Context, username, password str
 		return "", err
 	}
 
-	return infrastructure.NewJWTService().GenerateUserToken(user)
+	return uc.jwtService.GenerateUserToken(user)
 }
 
 

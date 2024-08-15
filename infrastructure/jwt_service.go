@@ -3,7 +3,6 @@ package infrastructure
 import (
 	"fmt"
 	"net/http"
-	bootstrap "task_managment_api"
 	"task_managment_api/domain"
 	"time"
 
@@ -15,10 +14,14 @@ type JWTService interface {
 	ValidateToken(tokenString string) (jwt.MapClaims, domain.CustomError)
 }
 
-type jwtService struct{}
+type jwtService struct{
+	AccessTokenSecret string
+}
 
-func NewJWTService() JWTService {
-	return &jwtService{}
+func NewJWTService(secret string) JWTService {
+	return &jwtService{
+		AccessTokenSecret: secret,
+	}
 }
 
 
@@ -35,7 +38,7 @@ func (js *jwtService) GenerateUserToken(user domain.User) (string, domain.Custom
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(bootstrap.NewEnv().AccessTokenSecret))
+	tokenString, err := token.SignedString([]byte(js.AccessTokenSecret))
 	if err != nil {
 		return "", domain.CustomError{ErrCode: http.StatusInternalServerError,ErrMessage:  "Error while generating token"}
 	}
@@ -48,7 +51,7 @@ func  (js *jwtService) ValidateToken(tokenString string) (jwt.MapClaims, domain.
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(bootstrap.NewEnv().AccessTokenSecret), nil
+		return []byte(js.AccessTokenSecret), nil
 	})
 
 	if err != nil || !token.Valid {

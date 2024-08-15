@@ -9,7 +9,6 @@ import (
 	"task_managment_api/infrastructure"
 	"task_managment_api/repositories"
 	"task_managment_api/usecases"
-	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -68,12 +67,12 @@ func main() {
 	tc := repositories.NewUserRepository(app.Db, app.Env.DbUserCollection)
 	ps := infrastructure.NewPasswordService()
 
-	timeOut := time.Second*3
-	
-	taskController := controllers.NewTaskController(usecases.NewTaskUsecase(tr, timeOut)) 
-	userController := controllers.NewUserController(usecases.NewUserUsecase(tc, timeOut,ps))
+	js := infrastructure.NewJWTService(app.Env.AccessTokenSecret)	
+	as := infrastructure.NewAuthService(js)
+	taskController := controllers.NewTaskController(usecases.NewTaskUsecase(tr)) 
+	userController := controllers.NewUserController(usecases.NewUserUsecase(tc, js,ps))
 
 
-	r := router.SetupRouter(app.Db, taskController, userController)
+	r := router.SetupRouter(app.Db, taskController, userController,as )
 	r.Run(":8080")	
 }

@@ -2,11 +2,11 @@ package usecases_test
 
 import (
 	"context"
-	"net/http"
 	"task_managment_api/domain"
 	"task_managment_api/usecases"
 	"testing"
-	"time"
+
+	"github.com/dgrijalva/jwt-go"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
@@ -49,31 +49,46 @@ func (m *MockPasswordService) VerifyPassword(user domain.User, password string) 
 	return args.Get(0).(domain.CustomError)
 }
 
+type MockJWTService struct {
+	mock.Mock
+}	
+
+func (m *MockJWTService) GenerateUserToken(user domain.User) (string, domain.CustomError) {
+	args := m.Called(user)
+	return args.Get(0).(string), args.Get(1).(domain.CustomError)
+}
+
+func (m *MockJWTService) ValidateToken(token string) (jwt.MapClaims, domain.CustomError) {
+	args := m.Called(token)
+	return args.Get(0).(jwt.MapClaims), args.Get(1).(domain.CustomError)
+}
+
 // Test Suite for UserUsecase
 type UserUsecaseSuite struct {
 	suite.Suite
-	mockRepo          *MockUserRepository
-	mockPasswordSvc   *MockPasswordService
-	usecase           domain.UserUsecase
-	timeout           time.Duration
+	mockRepo        *MockUserRepository
+	mockPasswordSvc *MockPasswordService
+	mockJwtService *MockJWTService
+	usecase         domain.UserUsecase
 }
 
 func (suite *UserUsecaseSuite) SetupTest() {
 	suite.mockRepo = new(MockUserRepository)
 	suite.mockPasswordSvc = new(MockPasswordService)
-	suite.timeout = time.Second * 2
-	suite.usecase = usecases.NewUserUsecase(suite.mockRepo, suite.timeout, suite.mockPasswordSvc)
+	suite.mockJwtService = new(MockJWTService)
+	suite.usecase = usecases.NewUserUsecase(suite.mockRepo, suite.mockJwtService,suite.mockPasswordSvc )
 }
 
 func (suite *UserUsecaseSuite) TearDownTest() {
 	suite.mockRepo.AssertExpectations(suite.T())
 	suite.mockPasswordSvc.AssertExpectations(suite.T())
 }
+
 // Test RegisterUser
 func (suite *UserUsecaseSuite) TestRegisterUser() {
 	user := domain.User{Username: "testuser", Password: "password"}
 
-	suite.mockRepo.On("GetUserByUsername", mock.Anything, user.Username).Return(domain.User{}, domain.CustomError{ErrCode: http.StatusBadRequest,ErrMessage: "User not found"})
+	suite.mockRepo.On("GetUserByUsername", mock.Anything, user.Username).Return(domain.User{}, domain.CustomError{ErrCode: 400, ErrMessage: "User not found"})
 	suite.mockRepo.On("GetUserCount", mock.Anything).Return(int64(1), domain.CustomError{})
 	suite.mockPasswordSvc.On("HashPassword", user.Password).Return("hashedpassword", domain.CustomError{})
 	suite.mockRepo.On("CreateUser", mock.Anything, mock.AnythingOfType("domain.User")).Return(domain.CustomError{})
@@ -95,7 +110,7 @@ func (suite *UserUsecaseSuite) TestRegisterUser_UserAlreadyExists() {
 
 	err := suite.usecase.RegisterUser(context.TODO(), user)
 
-	suite.Equal(http.StatusConflict, err.ErrCode)
+	suite.Equal(409, err.ErrCode)
 	suite.Equal("User already exists", err.ErrMessage)
 	suite.mockRepo.AssertCalled(suite.T(), "GetUserByUsername", mock.Anything, user.Username)
 	suite.mockRepo.AssertNotCalled(suite.T(), "GetUserCount", mock.Anything)
@@ -105,26 +120,27 @@ func (suite *UserUsecaseSuite) TestRegisterUser_UserAlreadyExists() {
 
 // Test RegisterUser when hashing password fails
 func (suite *UserUsecaseSuite) TestRegisterUser_HashPasswordError() {
-	user := domain.User{Username: "test user", Password: "password"}
-	suite.mockRepo.On("GetUserByUsername", mock.Anything, user.Username).Return(domain.User{}, domain.CustomError{ErrCode: http.StatusBadRequest,ErrMessage: "User not found"})
+	user := domain.User{Username: "testuser", Password: "password"}
+	suite.mockRepo.On("GetUserByUsername", mock.Anything, user.Username).Return(domain.User{}, domain.CustomError{ErrCode: 400, ErrMessage: "User not found"})
 	suite.mockRepo.On("GetUserCount", mock.Anything).Return(int64(0), domain.CustomError{})
-	suite.mockPasswordSvc.On("HashPassword", user.Password).Return("", domain.CustomError{ErrCode: http.StatusInternalServerError, ErrMessage: "Error while hashing password"})
+	suite.mockPasswordSvc.On("HashPassword", user.Password).Return("", domain.CustomError{ErrCode: 500, ErrMessage: "Error while hashing password"})
 
 	err := suite.usecase.RegisterUser(context.TODO(), user)
-	suite.Equal(http.StatusInternalServerError, err.ErrCode)
+	suite.Equal(500, err.ErrCode)
 
-	suite.mockRepo.AssertCalled(suite.T(),"GetUserByUsername", mock.Anything, user.Username )
-	suite.mockRepo.AssertCalled(suite.T(),"GetUserCount", mock.Anything )
-	suite.mockPasswordSvc.AssertCalled(suite.T(),"HashPassword", user.Password)
-	suite.mockRepo.AssertNotCalled(suite.T(),"CreateUser", mock.Anything, mock.AnythingOfType("domain.User"))
-
+	suite.mockRepo.AssertCalled(suite.T(), "GetUserByUsername", mock.Anything, user.Username)
+	suite.mockRepo.AssertCalled(suite.T(), "GetUserCount", mock.Anything)
+	suite.mockPasswordSvc.AssertCalled(suite.T(), "HashPassword", user.Password)
+	suite.mockRepo.AssertNotCalled(suite.T(), "CreateUser", mock.Anything, mock.AnythingOfType("domain.User"))
 }
+
 // Test AuthenticateUser
 func (suite *UserUsecaseSuite) TestAuthenticateUser() {
 	user := domain.User{Username: "testuser", Password: "hashedpassword"}
 
 	suite.mockRepo.On("GetUserByUsername", mock.Anything, user.Username).Return(user, domain.CustomError{})
 	suite.mockPasswordSvc.On("VerifyPassword", user, "password").Return(domain.CustomError{})
+	suite.mockJwtService.On("GenerateUserToken", user).Return("token", domain.CustomError{})
 
 	token, err := suite.usecase.AuthenticateUser(context.TODO(), user.Username, "password")
 
@@ -135,11 +151,12 @@ func (suite *UserUsecaseSuite) TestAuthenticateUser() {
 // Test AuthenticateUser with Invalid Credentials
 func (suite *UserUsecaseSuite) TestAuthenticateUser_InvalidCredentials() {
 	user := domain.User{Username: "testuser"}
-	suite.mockRepo.On("GetUserByUsername", mock.Anything, user.Username).Return(user, domain.CustomError{ErrCode: http.StatusNotFound, ErrMessage: "User not found"})
+	suite.mockRepo.On("GetUserByUsername", mock.Anything, user.Username).Return(domain.User{}, domain.CustomError{ErrCode: 404, ErrMessage: "User not found"})
+
 	token, err := suite.usecase.AuthenticateUser(context.TODO(), user.Username, "password")
 
 	suite.Equal("", token)
-	suite.Equal(http.StatusUnauthorized, err.ErrCode)
+	suite.Equal(401, err.ErrCode)
 	suite.mockRepo.AssertExpectations(suite.T())
 }
 

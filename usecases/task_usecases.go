@@ -5,18 +5,15 @@ import (
 	//"errors"
 	"net/http"
 	"task_managment_api/domain"
-	"time"
 )
 
 type taskUsecase struct {
 	taskRepository domain.TaskRepository
-	contextTimeout time.Duration
 }
 
-func NewTaskUsecase(taskRepository domain.TaskRepository, timeout time.Duration) domain.TaskUsecase {
+func NewTaskUsecase(taskRepository domain.TaskRepository, ) domain.TaskUsecase {
 	return &taskUsecase{
 		taskRepository: taskRepository,
-		contextTimeout: timeout,
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"task_managment_api/usecases"
 	"testing"
 	"time"
+
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
@@ -44,13 +45,11 @@ type TaskUsecaseSuite struct {
 	suite.Suite
 	mockRepo  *MockTaskRepository
 	usecase   domain.TaskUsecase
-	timeout   time.Duration
 }
 
 func (suite *TaskUsecaseSuite) SetupTest() {
 	suite.mockRepo = new(MockTaskRepository)
-	suite.timeout = time.Second * 2
-	suite.usecase = usecases.NewTaskUsecase(suite.mockRepo, suite.timeout)
+	suite.usecase = usecases.NewTaskUsecase(suite.mockRepo)
 }
 
 // Test GetTasks

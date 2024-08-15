@@ -7,9 +7,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type AuthMiddlewareService interface {
+	AuthMiddleware() gin.HandlerFunc
+	AdminMiddleware() gin.HandlerFunc
+}
+
+type AuthService struct {
+	jwtService JWTService
+}
+
+func NewAuthService(jwtService JWTService) AuthMiddlewareService {
+	return &AuthService{jwtService: jwtService}
+}
 
 
-func AuthMiddleware() gin.HandlerFunc {
+
+
+func (am *AuthService) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -24,7 +38,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		claims, err := NewJWTService().ValidateToken(tokenString)
+		claims, err := am.jwtService.ValidateToken(tokenString)
 		if err.ErrCode != 0  {
 			c.AbortWithStatusJSON(err.ErrCode, gin.H{"message": err.ErrMessage})
 			return
@@ -38,7 +52,7 @@ func AuthMiddleware() gin.HandlerFunc {
 }
 
 
-func AdminMiddleware() gin.HandlerFunc {
+func (am *AuthService) AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, exists := c.Get("role")
 		if !exists || role != "admin" {

@@ -16,11 +16,13 @@ type JWTServiceTestSuite struct {
 	service infrastructure.JWTService
 	secret  string
 	user    domain.User
+	secretToken string
 }
 
 func (suite *JWTServiceTestSuite) SetupTest() {
-	suite.service = infrastructure.NewJWTService()
 	suite.secret = "testsecret" // Mocked secret key for testing
+	suite.secretToken = "secretToken"
+	suite.service = infrastructure.NewJWTService(suite.secretToken)
 	suite.user = domain.User{
 		ID:       "user-id-123",
 		Username: "testuser",
