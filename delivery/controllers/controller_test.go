@@ -140,10 +140,54 @@ func (suite *TaskControllerTestSuite) TestDeleteTaskByID() {
 	suite.Equal(http.StatusOK, w.Code)
 }
 
+// TestCreateTaskInvalidJSON tests the CreateTask method with invalid JSON
+func (suite *TaskControllerTestSuite) TestCreateTaskInvalidJSON() {
+    taskJSON := `{"title": "New Task", "description": }` // Invalid JSON
 
+    w := httptest.NewRecorder()
+    c, _ := gin.CreateTestContext(w)
+    c.Request, _ = http.NewRequest(http.MethodPost, "/tasks", strings.NewReader(taskJSON))
+    c.Request.Header.Set("Content-Type", "application/json")
 
-// TestTaskControllerTestSuite runs the suite of tests
+    suite.controller.CreateTask(c)
 
+    suite.Equal(http.StatusBadRequest, w.Code)
+    suite.Contains(w.Body.String(), "Invalid JSON")
+}
+
+// TestGetTaskByIDNotFound tests the GetTaskByID method when the task is not found
+func (suite *TaskControllerTestSuite) TestGetTaskByIDNotFound() {
+    suite.mockTaskUsecase.On("GetTaskByID", mock.Anything, "1").Return(domain.Task{}, domain.CustomError{
+        ErrCode: http.StatusNotFound,
+        ErrMessage: "Task not found",
+    })
+
+    w := httptest.NewRecorder()
+    c, _ := gin.CreateTestContext(w)
+    c.Params = append(c.Params, gin.Param{Key: "id", Value: "1"})
+
+    suite.controller.GetTaskByID(c)
+
+    suite.Equal(http.StatusNotFound, w.Code)
+    suite.Contains(w.Body.String(), "Task not found")
+}
+
+// TestDeleteTaskByIDNotFound tests the DeleteTaskByID method when the task is not found
+func (suite *TaskControllerTestSuite) TestDeleteTaskByIDNotFound() {
+    suite.mockTaskUsecase.On("DeleteTaskByID", mock.Anything, "1").Return(domain.CustomError{
+        ErrCode: http.StatusNotFound,
+        ErrMessage: "Task not found",
+    })
+
+    w := httptest.NewRecorder()
+    c, _ := gin.CreateTestContext(w)
+    c.Params = append(c.Params, gin.Param{Key: "id", Value: "1"})
+
+    suite.controller.DeleteTaskByID(c)
+
+    suite.Equal(http.StatusNotFound, w.Code)
+    suite.Contains(w.Body.String(), "Task not found")
+}
 
 
 
@@ -234,6 +278,41 @@ func (suite *UserControllerTestSuite) TestPromoteUser() {
 
 	suite.Equal( http.StatusOK, w.Code)
 	suite.JSONEq( `{"message": "User promoted successfully"}`, w.Body.String())
+}
+
+// TestLoginUserInvalidJSON tests the LoginUser method with invalid JSON
+func (suite *UserControllerTestSuite) TestLoginUserInvalidJSON() {
+    loginJSON := `{"username": "user1", "password": }` // Invalid JSON
+
+    w := httptest.NewRecorder()
+    c, _ := gin.CreateTestContext(w)
+    c.Request, _ = http.NewRequest(http.MethodPost, "/login", strings.NewReader(loginJSON))
+    c.Request.Header.Set("Content-Type", "application/json")
+
+    suite.controller.LoginUser(c)
+
+    suite.Equal(http.StatusBadRequest, w.Code)
+    suite.Contains(w.Body.String(), "Invalid JSON")
+}
+
+// TestRegisterUserConflict tests the RegisterUser method when the user already exists
+func (suite *UserControllerTestSuite) TestRegisterUserConflict() {
+    userJSON := `{"username": "newuser", "password": "password"}`
+
+    suite.mockUserUsecase.On("RegisterUser", mock.Anything, mock.Anything).Return(domain.CustomError{
+        ErrCode: http.StatusConflict,
+        ErrMessage: "User already exists",
+    })
+
+    w := httptest.NewRecorder()
+    c, _ := gin.CreateTestContext(w)
+    c.Request, _ = http.NewRequest(http.MethodPost, "/register", strings.NewReader(userJSON))
+    c.Request.Header.Set("Content-Type", "application/json")
+
+    suite.controller.RegisterUser(c)
+
+    suite.Equal(http.StatusConflict, w.Code)
+    suite.Contains(w.Body.String(), "User already exists")
 }
 
 // TestControllerTestSuite runs the suites of the task tests and user tests

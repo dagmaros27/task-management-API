@@ -2,6 +2,7 @@ package repositories_test
 
 import (
 	"context"
+	"net/http"
 	"task_managment_api/domain"
 	"task_managment_api/repositories"
 	"testing"
@@ -60,6 +61,7 @@ func (suite *UserRepositorySuite) TestCreateUser() {
 	suite.Equal(user.Username, result.Username)
 }
 
+
 //Test GetUserByUsername
 func (suite *UserRepositorySuite) TestGetUserByUsername(){
 	user := domain.User{
@@ -74,6 +76,16 @@ func (suite *UserRepositorySuite) TestGetUserByUsername(){
 	suite.Empty(err.ErrCode)
 	suite.Equal(user.Username, result.Username)
 }
+
+//Test GetUserByUsername_NotFound
+func (suite *UserRepositorySuite) TestGetUserByUsername_NotFound(){
+	result, err := suite.repo.GetUserByUsername(context.TODO(), "invalid username")
+	suite.Empty(result.Username)
+	suite.Equal(http.StatusBadRequest, err.ErrCode)
+}
+
+//Test GetUserByUsername_Error
+
 
 //Test update user
 func (suite *UserRepositorySuite) TestUpdateUser(){
@@ -95,6 +107,36 @@ func (suite *UserRepositorySuite) TestUpdateUser(){
 	suite.NoError(dbError)
 	suite.Equal(user.Role, result.Role)
 }
+
+//Test UpdateUser_Error
+func (suite *UserRepositorySuite) TestUpdateUser_Error(){
+	user := domain.User{
+		Username: "Test User",
+		Password: "hashed password",
+		Role: "admin",}
+
+	insertedResult, dbError := suite.collection.InsertOne(context.TODO(), user)
+	suite.NoError(dbError)
+	user.ID = insertedResult.InsertedID.(primitive.ObjectID).Hex() + "invalid"
+	user.Role = "user"
+
+	err := suite.repo.UpdateUser(context.TODO(), user)
+	suite.Equal(http.StatusInternalServerError, err.ErrCode)
+}
+
+//Test UpdateUser_NotFound
+func (suite *UserRepositorySuite) TestUpdateUser_NotFound(){
+	user := domain.User{
+		ID: primitive.NewObjectID().Hex(),
+		Username: "Test User",
+		Password: "hashed password",
+		Role: "admin",}
+	err := suite.repo.UpdateUser(context.TODO(), user)
+	suite.Equal(http.StatusNotFound, err.ErrCode)
+}
+	
+	
+
 
 //Test get user by count
 func (suite *UserRepositorySuite) TestGetUserByCount(){

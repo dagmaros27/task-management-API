@@ -2,6 +2,7 @@ package repositories_test
 
 import (
 	"context"
+	"net/http"
 	"task_managment_api/domain"
 	"task_managment_api/repositories"
 	"testing"
@@ -76,6 +77,7 @@ func (suite *TaskRepositorySuite) TestGetTasks() {
 	suite.NotEmpty(tasks)
 }
 
+
 // Test GetTaskByID
 func (suite *TaskRepositorySuite) TestGetTaskByID() {
 	task := domain.Task{
@@ -84,14 +86,35 @@ func (suite *TaskRepositorySuite) TestGetTaskByID() {
 		DueDate:     time.Now().Format(time.RFC3339),
 		Status:      "Pending",
 	}
-
+	
 	insertedResult, dbError := suite.collection.InsertOne(context.TODO(), task)
 	suite.NoError(dbError)
-
+	
 	result, err := suite.repo.GetTaskByID(context.TODO(), insertedResult.InsertedID.(primitive.ObjectID).Hex())
 	suite.Empty(err.ErrCode)
 	suite.Equal(task.Title, result.Title)
 }
+
+//Test GetTasksById_InvalidID
+func (suite *TaskRepositorySuite) TestGetTaskByID_InvalidID() {
+	_, err := suite.repo.GetTaskByID(context.TODO(), "invalidID")
+	suite.Equal(http.StatusInternalServerError, err.ErrCode)
+}
+
+// TestGetTaskByID_NotFound
+func (suite *TaskRepositorySuite) TestGetTaskByID_NotFound() {
+	_, dbError := suite.collection.InsertOne(context.TODO(), domain.Task{
+		Title:       "Sample Task",
+		Description: "Sample Description",
+		DueDate:     time.Now().Format(time.RFC3339),
+		Status:      "Pending",
+	})
+	suite.NoError(dbError)
+	_, err:=  suite.repo.GetTaskByID(context.TODO(), primitive.NewObjectID().Hex())
+	suite.Equal(http.StatusNotFound, err.ErrCode)
+}
+
+
 
 // Test UpdateTaskByID
 func (suite *TaskRepositorySuite) TestUpdateTaskByID() {
@@ -139,6 +162,18 @@ func (suite *TaskRepositorySuite) TestDeleteTaskByID() {
 
 	dbError = suite.collection.FindOne(context.TODO(), bson.M{"_id": task.ID}).Err()
 	suite.Equal(mongo.ErrNoDocuments, dbError)
+}
+
+// Test DeleteTaskByID_InvalidID
+func (suite *TaskRepositorySuite) TestDeleteTaskByID_InvalidID() {
+	err := suite.repo.DeleteTaskByID(context.TODO(), "invalidID")
+	suite.Equal(http.StatusBadRequest, err.ErrCode)
+}
+
+// Test DeleteTaskByID_NotFound
+func (suite *TaskRepositorySuite) TestDeleteTaskByID_NotFound() {
+	err := suite.repo.DeleteTaskByID(context.TODO(), primitive.NewObjectID().Hex())
+	suite.Equal(http.StatusNotFound, err.ErrCode)
 }
 
 func TestTaskRepositorySuite(t *testing.T) {

@@ -51,9 +51,12 @@ func (us *userRepository) UpdateUser(c context.Context, user domain.User) domain
 	if err != nil {
 		return domain.CustomError{ErrCode: http.StatusInternalServerError, ErrMessage: "Error while updating user"}
 	}
-	_, err = us.collection.UpdateOne(c, bson.M{"_id": objectID}, bson.M{"$set": user})
+	updatedUser, err := us.collection.UpdateOne(c, bson.M{"_id": objectID}, bson.M{"$set": user})
 	if err != nil {
 		return domain.CustomError{ErrCode: http.StatusInternalServerError, ErrMessage: err.Error()}
+	}
+	if updatedUser.MatchedCount == 0{
+		return domain.CustomError{ErrCode: http.StatusNotFound, ErrMessage: "User not found"}
 	}
 	return domain.CustomError{}
 }
